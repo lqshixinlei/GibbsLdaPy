@@ -20,6 +20,8 @@ class lda(object):
     self.nksum = []
     self.ndsum = []
     self.p = []
+    self.theta = []
+    self.phi = []
 
   def read_trn_data(self):
     word_id = 0
@@ -40,41 +42,45 @@ class lda(object):
     f.close()
 
   def init_est(self):
-    for m in xrange(len(self.z)):
+    for m in xrange(len(self.trn_data)):
       self.z.append([])
-      N = len(self.z[m])
+      N = len(self.trn_data[m])
       for n in xrange(N):
         self.z[m].append(0)
-    if topics != None:
-      self.topics = topics
-      for i in xrange(topics):
-        self.nkw.append([0 for i in xrange(len(self.words_set))])
-        self.p.append(0)
+    self.nksum = [0 for i in xrange(self.topics)]
+    for i in xrange(self.topics):
+      self.nkw.append([0 for i in xrange(len(self.words_set))])
+      self.phi.append([0 for i in xrange(len(self.words_set))])
+      self.p.append(0)
     M = len(self.z)
+    self.ndsum = [0 for i in xrange(M)]
     for m in xrange(M):
       self.ndk.append([0 for i in xrange(self.topics)])
+      self.theta.append([0 for i in xrange(self.topics)])
     M = len(self.z)
     for m in xrange(M):
       N = len(self.z[m])
       for n in xrange(N):
-        w = word_id_dict[self.trn_data[m][n]]
-        self.z[m][n] = int(random.random()*topics)
-        self.nkw[z[m][n]][w] += 1
-        self.ndk[m][z[m][n]] += 1
-        self.nksum[z[m][n]] += 1
+        w = self.word_id_dict[self.trn_data[m][n]]
+        self.z[m][n] = int(random.random()*self.topics)
+        w_topic = self.z[m][n]
+        self.nkw[w_topic][w] += 1
+        self.ndk[m][w_topic] += 1
+        self.nksum[w_topic] += 1
       self.ndsum[m] += N
 
   def estimate(self):
     for i in xrange(self.itr):
+      print "iteration:",i
       M = len(self.z)
       for m in xrange(M):
         N = len(self.z[m])
         for n in xrange(N):
-          topic = sampling(m, n)
-          z[m][n] = topic
+          topic = self.sampling(m, n)
+          self.z[m][n] = topic
 
   def sampling(self, m, n):
-    topic = z[m][n]
+    topic = self.z[m][n]
     w = self.word_id_dict[self.trn_data[m][n]]
     K = self.topics
     V = len(self.words_set)
@@ -83,13 +89,13 @@ class lda(object):
     self.nksum[topic] -= 1
     self.ndsum[m] -= 1
     for k in xrange(K):
-      self.p[k] = ((nkw[k][w]+self.beta)/(nksum[k]+V*self.beta)) * \
-          ((ndk[m][k]+self.alpha)/(ndsum[m]+K*self.alpha))
+      self.p[k] = ((self.nkw[k][w]+self.beta)/(self.nksum[k]+V*self.beta)) * \
+          ((self.ndk[m][k]+self.alpha)/(self.ndsum[m]+K*self.alpha))
     for k in xrange(1,K):
-      self.p[k] += p[k-1]
-    u = random.random() * p[K-1]
+      self.p[k] += self.p[k-1]
+    u = random.random() * self.p[K-1]
     for topic in xrange(K):
-      if p[topic] > u:
+      if self.p[topic] > u:
         break;
     self.nkw[topic][w] += 1
     self.ndk[m][topic] += 1
@@ -98,8 +104,42 @@ class lda(object):
 
     return topic
 
+  def compute_theta(self):
+    M = len(self.z)
+    K = self.topics
+    for m in xrange(M):
+      for k in xrange(K):
+        self.theta[m][k] = (self.ndk[m][k]+self.alpha) / (self.ndsum[m] + K*self.alpha)
+
+  def compute_phi(self):
+    K = self.topics
+    V = len(self.words_set)
+    for k in xrange(K):
+      for w in xrange(V):
+        self.phi[k][w] = (self.nkw[k][w]+self.beta) / (self.nksum[k] + V*self.beta)
+
+  def save_model_twords(self):
+    K = self.topics
+    V = len(self.words_set)
+    for k in xrange(K):
+      word_prob_lst_tmp = []
+      word_prob_lst = []
+      print "Topic", k
+      for v in xrange(V):
+        word_prob_lst_tmp.append([v,self.phi[k][v]])
+      word_prob_lst = sorted(word_prob_lst_tmp, key=lambda x:x[1], reverse=True)
+      for i in xrange(10):
+        print "\t",self.id_word_dict[word_prob_lst[i][0]]
+
+
 if __name__ == "__main__":
-  lda_model = lda("./test", 5, 0.05, 0.05, 100)
+  lda_model = lda("./test", 20, 0.05, 0.05, 100)
   lda_model.read_trn_data()
+  lda_model.init_est()
+  lda_model.estimate()
+  lda_model.compute_theta()
+  lda_model.compute_phi()
+  #print lda_model.theta
+  lda_model.save_model_twords()
   #for key in lda_model.word_id_dict:
   #  print key, lda_model.word_id_dict[key]
